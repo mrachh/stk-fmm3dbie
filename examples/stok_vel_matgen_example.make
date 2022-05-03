@@ -1,4 +1,4 @@
-EXEC = int2-stok-vel-iter-example
+EXEC = int2
 #HOST = gcc
 HOST = gcc-openmp
 #HOST = intel
@@ -57,7 +57,7 @@ ifeq ($(HOST),intel-openmp)
     FFLAGS= -O3 -fPIC -march=native -qopenmp
 endif
 
-FEND = -L${FMMBIE_INSTALL_DIR} $(LLINKLIB) 
+FEND = -L${FMMBIE_INSTALL_DIR} $(LLINKLIB) $(LFMMLINKLIB) 
 #-L${FMM_INSTALL_DIR} $(LFMMLINKLIB)
 
 .PHONY: all clean 

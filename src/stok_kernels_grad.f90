@@ -79,9 +79,9 @@ subroutine st3d_slp_grad_comp(src,ndt,targ,ndd,dpars,ndz,zk,ndi,ipars,val)
   dr(3)=targ(3)-src(3)
 
   
-  r=sqrt(dx**2+dy**2+dz**2)
+  r=sqrt(dr(1)**2+dr(2)**2+dr(3)**2)
   rinv = 1.0d0/r
-  rinv3 = 0.5d0*rinv**5
+  rinv5 = 0.5d0*rinv**5
   
 
   val = (dr(1)**i)*(dr(2)**j)*(dr(3)**k)*rinv5*over4pi

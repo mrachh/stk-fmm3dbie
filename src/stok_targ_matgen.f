@@ -190,6 +190,7 @@ c
      1        row_ptr,col_ind,iquad,rfac0,nquad,wnear1)
          print *, "done with kernel l=",l
          
+         
 C$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ii)       
          do ii=1,nquad
             wnear(l,ii) = wnear1(ii)
@@ -405,7 +406,7 @@ c
       enddo
 
       allocate(iquad(nnz+1)) 
-      call get_iquad_rsc(npatches,ixyzs,npts,nnz,row_ptr,col_ind,
+      call get_iquad_rsc(npatches,ixyzs,ntarg,nnz,row_ptr,col_ind,
      1         iquad)
 
       ikerorder = 0
@@ -430,7 +431,6 @@ C$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(j)
       enddo
 C$OMP END PARALLEL DO    
 
-
       iquadtype = 1
 
       print *, "starting to generate near quadrature"
@@ -438,7 +438,7 @@ C$OMP END PARALLEL DO
 C$      t1 = omp_get_wtime()      
 
       call getnearquad_stok_s_grad(npatches,norders,
-     1     ixyzs,iptype,npts,srccoefs,srcvals,ndtarg,npts,targs,
+     1     ixyzs,iptype,npts,srccoefs,srcvals,ndtarg,ntarg,targs,
      1     ipatch_id,uvs_targ,eps,iquadtype,nnz,row_ptr,col_ind,
      1     iquad,rfac0,nquad,wnear_s,wnear_g)
       call cpu_time(t2)
@@ -508,7 +508,7 @@ c    handle x component of gradient
              
              gmat(9*(i-1)+4,3*(jj-1)+1) = w21
              gmat(9*(i-1)+4,3*(jj-1)+2) = w22
-             gmat(9*(i-1)+4,3*(jj-1)+3) = w33
+             gmat(9*(i-1)+4,3*(jj-1)+3) = w23
              
              gmat(9*(i-1)+7,3*(jj-1)+1) = w31
              gmat(9*(i-1)+7,3*(jj-1)+2) = w32
@@ -535,7 +535,7 @@ c
              
              gmat(9*(i-1)+5,3*(jj-1)+1) = w21
              gmat(9*(i-1)+5,3*(jj-1)+2) = w22
-             gmat(9*(i-1)+5,3*(jj-1)+3) = w33
+             gmat(9*(i-1)+5,3*(jj-1)+3) = w23
              
              gmat(9*(i-1)+8,3*(jj-1)+1) = w31
              gmat(9*(i-1)+8,3*(jj-1)+2) = w32
@@ -562,7 +562,7 @@ c
              
              gmat(9*(i-1)+6,3*(jj-1)+1) = w21
              gmat(9*(i-1)+6,3*(jj-1)+2) = w22
-             gmat(9*(i-1)+6,3*(jj-1)+3) = w33
+             gmat(9*(i-1)+6,3*(jj-1)+3) = w23
              
              gmat(9*(i-1)+9,3*(jj-1)+1) = w31
              gmat(9*(i-1)+9,3*(jj-1)+2) = w32

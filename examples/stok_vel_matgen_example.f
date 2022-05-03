@@ -9,12 +9,15 @@
       integer, allocatable :: row_ptr(:),col_ind(:)
       integer, allocatable :: iquad(:)
       real *8, allocatable :: srcover(:,:),wover(:)
+      real *8, allocatable :: sources_use(:,:),pre_src(:)
+      real *8, allocatable :: grad_src(:,:,:)
 
       integer, allocatable :: norders(:),ixyzs(:),iptype(:)
       integer, allocatable :: ixyzso(:),nfars(:)
 
       integer, allocatable :: ipatch_id(:),inode_id(:)
-      integer, allocatable :: ipatch_id_src(:),uvs_src(:,:)
+      integer, allocatable :: ipatch_id_src(:)
+      real *8, allocatable :: uvs_src(:,:)
       real *8, allocatable :: uvs_targ(:,:)
       real *8 xyz_out(3),xyz_in(3),stracmat(3,3),smat(3,3), dmat(3,3)
       real *8 xyz_src(3),xyz_targ(3)
@@ -24,7 +27,12 @@
       real *8 st2(3), du2(3), uconst(3)
       real *8 v(3), omega(3), r0(3), udiff(3,10), udiff2(3,10)     
       real *8, allocatable :: xmat(:,:),gmat(:,:)
+      real *8, allocatable :: xmat_targ(:,:),gmat_targ(:,:)
       real *8, allocatable :: uval(:,:), tracval(:,:), soln(:,:)
+      real *8, allocatable :: uval_targ(:,:),pre_targ(:)
+      real *8, allocatable :: grad_targ(:,:,:)
+      real *8, allocatable :: uval_ex_targ(:,:),pre_ex_targ(:)
+      real *8, allocatable :: grad_ex_targ(:,:,:)
       complex * 16 zpars
 
       call prini(6,13)
@@ -39,7 +47,7 @@ c       igeomtype = 1 => sphere
 c       igeomtype = 2 => stellarator
 c 
       igeomtype = 1
-      if(igeomtype.eq.1) ipars(1) = 0
+      if(igeomtype.eq.1) ipars(1) = 1
       if(igeomtype.eq.2) ipars(1) = 5*2
 
       if(igeomtype.eq.1) then
@@ -55,6 +63,13 @@ c
         xyz_out(1) = 3.17d0
         xyz_out(2) = -0.03d0
         xyz_out(3) = 3.15d0
+
+        rr = 1.0d0 + 1.0d-1
+        thet = hkrand(0)*pi
+        phi = hkrand(0)*2*pi
+        xyz_out(1) = rr*sin(thet)*cos(phi)
+        xyz_out(2) = rr*sin(thet)*sin(phi)
+        xyz_out(3) = rr*cos(thet)
 
         xyz_in(1) = 0.17d0
         xyz_in(2) = 0.23d0
@@ -95,7 +110,6 @@ c
 
       npts = npatches*npols
       allocate(srcvals(12,npts),srccoefs(9,npts))
-      allocate(targs(3,npts))
       ifplot = 0
 
 
@@ -118,43 +132,25 @@ c
 
       allocate(uval(3,npts),tracval(3,npts))
 
+      nd = 1
+      allocate(sources_use(3,npts),pre_src(npts),grad_src(3,3,npts))
+
       sigout(1) = 1.1d0
       sigout(2) = -0.27d0
       sigout(3) = .31d0
+
+      uval = 0
+      pre_src = 0
+      grad_src = 0
+      thresh = 1.0d-16
+
+      sources_use(1:3,1:npts) = srcvals(1:3,1:npts)
       
-      do i=1,npts
-         call st3d_slp_vec(9,xyz_src,3,srcvals(1,i),0,dpars,0,zpars,0,
-     1        ipars,smat)
-         uval(1,i) = smat(1,1)*sigout(1) + smat(1,2)*sigout(2)
-     1        + smat(1,3)*sigout(3)
-         uval(2,i) = smat(2,1)*sigout(1) + smat(2,2)*sigout(2)
-     1        + smat(2,3)*sigout(3)
-         uval(3,i) = smat(3,1)*sigout(1) + smat(3,2)*sigout(2)
-     1        + smat(3,3)*sigout(3)
-      enddo
-
-
-
-      call st3d_slp_vec(9,xyz_src,3,xyz_targ,0,dpars,0,zpars,0,
-     1     ipars,smat)
+      call st3ddirectstokg(nd,xyz_src,sigout,1,sources_use,npts,uval,
+     1  pre_src,grad_src,thresh)
       
-       uintest(1) = smat(1,1)*sigout(1) + smat(1,2)*sigout(2)
-     1        + smat(1,3)*sigout(3)
-       uintest(2) = smat(2,1)*sigout(1) + smat(2,2)*sigout(2)
-     1        + smat(2,3)*sigout(3)
-       uintest(3) = smat(3,1)*sigout(1) + smat(3,2)*sigout(2)
-     1        + smat(3,3)*sigout(3)
 
-
-      npt1 = 1
-      allocate(ipatch_id(npt1),uvs_targ(2,npt1))
-      do i=1,npt1
-        ipatch_id(i) = -1
-        uvs_targ(1,i) = 0
-        uvs_targ(2,i) = 0
-      enddo
-
-      allocate(ipatch_id_src(npts),uvs_src(2,nsrc))
+      allocate(ipatch_id_src(npts),uvs_src(2,npts))
 
       call get_patch_id_uvs(npatches,norders,ixyzs,iptype,npts, 
      1  ipatch_id_src,uvs_src)
@@ -172,7 +168,7 @@ c
       numit = 200
       nmat = 3*npts
       allocate(xmat(nmat,nmat),gmat(3*nmat,nmat))
-      eps = 1d-7
+      eps = 1d-9
       do i=1,nmat
         do j=1,nmat
           xmat(j,i) = 0
@@ -186,36 +182,88 @@ c
       enddo
 
       call stok_cg_matgen(npatches,norders,ixyzs,iptype,
-     1  npts,srccoefs,srcvals,eps,12,npts,srcvals,ipatch_id_src,
-     2  uvs_src,xmat,gmat)
+     1  npts,srccoefs,srcvals,12,npts,srcvals,ipatch_id_src,
+     2  uvs_src,eps,xmat,gmat)
       
 
       allocate(soln(3,npts))
       dcond = 0
+      info = 0
+      print *, "nmat=",nmat
+      call cpu_time(t1)
+C$      t1 = omp_get_wtime()      
       call dgausselim(nmat,xmat,uval,info,soln,dcond)
       call prin2('dcond=*',dcond,1)
+      call cpu_time(t2)
+C$      t2 = omp_get_wtime()      
+      call prin2('solve time=*',t2-t1,1)
 
 
 
       ndt_in = 3
-      nt_in = 1
-      call lpcomp_stok_comb_vel(npatches,norders,ixyzs,
-     1     iptype,npts,srccoefs,srcvals,ndt_in,nt_in,xyz_targ,
-     2     ipatch_id,uvs_targ,eps,dpars,soln,udir)
 
-      udir(1) = udir(1) 
-      udir(2) = udir(2) 
-      udir(3) = udir(3) 
+      ntarg = 1
+      allocate(ipatch_id(ntarg),uvs_targ(2,ntarg))
+      do i=1,ntarg
+        ipatch_id(i) = -1
+        uvs_targ(1,i) = 0
+        uvs_targ(2,i) = 0
+      enddo
+
+
+      allocate(uval_ex_targ(3,ntarg),uval_targ(3,ntarg))
+      allocate(pre_ex_targ(ntarg),pre_targ(ntarg))
+      allocate(grad_ex_targ(3,3,ntarg),grad_targ(3,3,ntarg))
+
+      allocate(xmat_targ(3*ntarg,3*npts),gmat_targ(9*ntarg,3*npts))
+
+      call stok_cg_matgen(npatches,norders,ixyzs,iptype,
+     1  npts,srccoefs,srcvals,ndt_in,ntarg,xyz_targ,ipatch_id,
+     2  uvs_targ,eps,xmat_targ,gmat_targ)
+      call lpcomp_stok_comb_vel(npatches,norders,ixyzs,
+     1     iptype,npts,srccoefs,srcvals,ndt_in,ntarg,xyz_targ,
+     2     ipatch_id,uvs_targ,eps,dpars,soln,uval_targ)
+      call prin2('gmat_targ=*',gmat_targ,24)
+      call dmatvec(3*ntarg,3*npts,xmat_targ,soln,uval_targ)
+      call dmatvec(9*ntarg,3*npts,gmat_targ,soln,grad_targ)
+
+      uval_ex_targ = 0
+      pre_ex_targ = 0
+      grad_ex_targ = 0
+      call st3ddirectstokg(nd,xyz_src,sigout,1,xyz_targ,ntarg,
+     1  uval_ex_targ,pre_ex_targ,grad_ex_targ,thresh)
 
       sum = 0
       sumrel = 0
 
-      do i = 1,3
-         sum = sum + (udir(i)-uintest(i))**2
-         sumrel = sumrel + (uintest(i))**2
-      enddo
       
-      call prin2('rel err in velocity *',sqrt(sum/sumrel),1)
+      call prin2('uval_targ=*',uval_targ,3)
+      call prin2('uval_ex_targ=*',uval_ex_targ,3)
+
+      rv = 0
+      errv = 0
+      rg = 0
+      errg = 0
+      do i=1,ntarg
+        do l=1,3
+          rv = rv + abs(uval_ex_targ(l,i))**2
+          errv = errv + abs(uval_targ(l,i)-uval_ex_targ(l,i))**2
+          do m=1,3
+            rg = rg + abs(grad_ex_targ(m,l,i))**2
+            errg = errg + abs(grad_targ(m,l,i)-grad_ex_targ(m,l,i))**2
+          enddo
+        enddo
+      enddo
+
+      errv = sqrt(errv/rv)
+      call prin2('error in velocity at targets=*',errv,1)
+      
+      errg = sqrt(errg/rg)
+      call prin2('error in gradient at targets=*',errg,1)
+
+      call prin2('grad_targ=*',grad_targ,9)
+      call prin2('grad_targ_ex=*',grad_ex_targ,9)
+      
 
       
       stop
